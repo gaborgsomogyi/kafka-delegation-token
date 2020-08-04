@@ -113,6 +113,18 @@ object SecureKafkaConsumer {
     };
     new Timer().scheduleAtFixedRate(renewTask, 0, renewPeriodMs);
 
+    val username = token.tokenInfo.tokenId;
+    var password = token.hmacAsBase64String;
+    val jaasConfigForDelegationTokenAuth =
+      s"""
+      |org.apache.kafka.common.security.scram.ScramLoginModule required
+      | username="$username"
+      | password="$password"
+      | serviceName="kafka"
+      | tokenauth=true;
+      """.stripMargin.replace("\n", "")
+    log.info(s"JAAS config for delegation token auth: $jaasConfigForDelegationTokenAuth")
+ 
     log.info("Creating consumer config properties...")
     val consumerProperties = new Properties
     consumerProperties.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer)
@@ -120,7 +132,8 @@ object SecureKafkaConsumer {
     consumerProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer")
     consumerProperties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer")
     consumerProperties.put(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString)
-    consumerProperties.put(SaslConfigs.SASL_JAAS_CONFIG, jaasConfig)
+    consumerProperties.put(SaslConfigs.SASL_JAAS_CONFIG, jaasConfigForDelegationTokenAuth)
+    consumerProperties.put("sasl.mechanism", "SCRAM-SHA-256")
     if (isUsingSsl) {
       consumerProperties.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "/etc/cdep-ssl-conf/CA_STANDARD/truststore.jks")
       consumerProperties.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "cloudera")
